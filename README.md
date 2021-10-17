@@ -1,4 +1,4 @@
-# Utils
+# utils
 Hey there
 
 This is my vault.
