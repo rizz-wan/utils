@@ -1,9 +1,9 @@
-# utils
+# Utils
 Hey there
 
 This is my vault.
 
-Here I host the reusable componenets to be used accross the projects such as icons and my [resume](https://rizz-wan.github.io/utils/files/Mohammed_Rizwan_Khan.pdf).
+Here I host the reusable components to be used accross the projects such as icons and my [resume](https://rizz-wan.github.io/utils/files/Mohammed_Rizwan_Khan.pdf).
 
 Thanks,
 
