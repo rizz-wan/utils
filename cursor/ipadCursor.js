@@ -1,1 +1,630 @@
-let ready=!1,observer=null,cursorEle=null,isBlockActive=!1,isTextActive=!1,isMouseDown=!1,styleTag=null,latestCursorStyle={},mousedownStyleRecover={};const position={x:0,y:0},isServer="undefined"==typeof document,registeredNodeSet=new Set,eventMap=new Map,config=getDefaultConfig();class Utils{static clamp(e,t,r){return Math.min(Math.max(e,t),r)}static isNum(e){return"number"==typeof e||/^\d+$/.test(e)}static getSize(e){return this.isNum(e)?`${e}px`:e}static getDuration(e){return this.isNum(e)?`${e}ms`:`${e}`}static getColor(e){return e}static objectKeys(e){return Object.keys(e)}static style2Vars(e){const t={backdropBlur:"--cursor-bg-blur",backdropSaturate:"--cursor-bg-saturate",background:"--cursor-bg",border:"--cursor-border",durationBackdropFilter:"--cursor-blur-duration",durationBase:"--cursor-duration",durationPosition:"--cursor-position-duration",height:"--cursor-height",radius:"--cursor-radius",scale:"--cursor-scale",width:"--cursor-width",zIndex:"--cursor-z-index"};return this.objectKeys(e).reduce((r,o)=>{let s=e[o];if(void 0===s)return r;const n=["background","border"].includes(o),i=["width","height","radius","backdropBlur"].includes(o),a=o.startsWith("duration");return n&&(s=this.getColor(s)),i&&(s=this.getSize(s)),a&&(s=this.getDuration(s)),{...r,[t[o]||o]:s}},{})}static isMergebleObject(e){return(e=>e&&"object"==typeof e&&!Array.isArray(e))(e)}static mergeDeep(e,...t){if(!t.length)return e;const r=t.shift();return r?(this.isMergebleObject(e)&&this.isMergebleObject(r)&&Utils.objectKeys(r).forEach(t=>{this.isMergebleObject(r[t])?(e[t]||Object.assign(e,{[t]:{}}),this.mergeDeep(e[t],r[t])):Object.assign(e,{[t]:r[t]})}),this.mergeDeep(e,...t)):e}}function getDefaultConfig(){return{blockPadding:"auto",adsorptionStrength:10,className:"ipad-cursor",normalStyle:{width:"20px",height:"20px",radius:"50%",durationBase:"0.23s",durationPosition:"0s",durationBackdropFilter:"0s",background:"rgba(150, 150, 150, 0.2)",scale:1,border:"1px solid rgba(100, 100, 100, 0.1)",zIndex:9999,backdropBlur:"0px",backdropSaturate:"180%"},textStyle:{background:"rgba(100, 100, 100, 0.3)",scale:1,width:"4px",height:"1.2em",border:"0px solid rgba(100, 100, 100, 0)",durationBackdropFilter:"1s",radius:"10px"},blockStyle:{background:"rgba(100, 100, 100, 0.3)",border:"1px solid rgba(100, 100, 100, 0.05)",backdropBlur:"0px",durationBase:"0.23s",durationBackdropFilter:"0.1s",backdropSaturate:"120%",radius:"10px"},mouseDownStyle:{background:"rgba(150, 150, 150, 0.3)",scale:.8}}}function updateCursorStyle(e,t){cursorEle&&("string"==typeof e?(latestCursorStyle[e]=t,t&&cursorEle.style.setProperty(e,t)):Object.entries(e).forEach(([e,t])=>{cursorEle&&cursorEle.style.setProperty(e,t),latestCursorStyle[e]=t}))}function onMousemove(e){position.x=e.clientX,position.y=e.clientY,autoApplyTextCursor(e.target)}function onMousedown(){isMouseDown||!config.enableMouseDownEffect||isBlockActive||(isMouseDown=!0,mousedownStyleRecover={...latestCursorStyle},updateCursorStyle(Utils.style2Vars(config.mouseDownStyle||{})))}function onMouseup(){if(!isMouseDown||!config.enableMouseDownEffect||isBlockActive)return;isMouseDown=!1;const e=mousedownStyleRecover;updateCursorStyle(Utils.objectKeys(Utils.style2Vars(config.mouseDownStyle||{})).reduce((t,r)=>({...t,[r]:e[r]}),{}))}function autoApplyTextCursor(e){var t;if(!isBlockActive&&!isTextActive&&config.enableAutoTextCursor){if(e&&1===e.childNodes.length){const r=e.childNodes[0];if(3===r.nodeType&&""!==(null===(t=r.textContent)||void 0===t?void 0:t.trim()))return e.setAttribute("data-cursor","text"),void applyTextCursor(e)}resetCursorStyle()}}let lastNode=null;const scrollHandler=()=>{const e=document.elementFromPoint(position.x,position.y),t=new MouseEvent("mouseleave",{bubbles:!0,cancelable:!0,view:window});e!==lastNode&&lastNode&&t&&lastNode.dispatchEvent(t),lastNode=e};function initCursor(e){isServer||ready||(e&&updateConfig(e),ready=!0,window.addEventListener("mousemove",onMousemove),window.addEventListener("mousedown",onMousedown),window.addEventListener("mouseup",onMouseup),window.addEventListener("scroll",scrollHandler),createCursor(),createStyle(),updateCursorPosition(),updateCursor(),createObserver())}function createObserver(){config.enableAutoUpdateCursor&&(observer=new MutationObserver(function(){updateCursor()})).observe(document.body,{childList:!0,subtree:!0})}function disposeCursor(){ready&&(ready=!1,window.removeEventListener("mousemove",onMousemove),window.removeEventListener("scroll",scrollHandler),cursorEle&&cursorEle.remove(),styleTag&&styleTag.remove(),styleTag=null,cursorEle=null,registeredNodeSet.forEach(e=>unregisterNode(e)),null==observer||observer.disconnect())}function updateConfig(e){var t;return"adsorptionStrength"in e&&(config.adsorptionStrength=Utils.clamp(null!==(t=e.adsorptionStrength)&&void 0!==t?t:10,0,30)),Utils.mergeDeep(config,e)}function createStyle(){if(styleTag)return;const e=`.${config.className.split(/\s+/).join(".")}`;(styleTag=document.createElement("style")).innerHTML=`\n    body, * {\n      cursor: none;\n    }\n    ${e} {\n      --cursor-transform-duration: 0.23s;\n      overflow: hidden;\n      pointer-events: none;\n      position: fixed;\n      left: var(--cursor-x);\n      top: var(--cursor-y);\n      width: var(--cursor-width);\n      height: var(--cursor-height);\n      border-radius: var(--cursor-radius);\n      background-color: var(--cursor-bg);\n      border: var(--cursor-border);\n      z-index: var(--cursor-z-index);\n      font-size: var(--cursor-font-size);\n      backdrop-filter:\n        blur(var(--cursor-bg-blur))\n        saturate(var(--cursor-bg-saturate));\n      transition:\n        width var(--cursor-duration) ease,\n        height var(--cursor-duration) ease,\n        border-radius var(--cursor-duration) ease,\n        border var(--cursor-duration) ease,\n        background-color var(--cursor-duration) ease,\n        left var(--cursor-position-duration) ease,\n        top var(--cursor-position-duration) ease,\n        backdrop-filter var(--cursor-blur-duration) ease,\n        transform var(--cursor-transform-duration) ease;\n      transform:\n        translateX(calc(var(--cursor-translateX, 0px) - 50%))\n        translateY(calc(var(--cursor-translateY, 0px) - 50%))\n        scale(var(--cursor-scale, 1));\n    }\n    ${e}.block-active {\n      --cursor-transform-duration: 0s;\n    }\n    ${e} .lighting {\n      display: none;\n    }\n    ${e}.lighting--on .lighting {\n      display: block;\n      width: 0;\n      height: 0;\n      position: absolute;\n      left: calc(var(--lighting-size) / -2);\n      top: calc(var(--lighting-size) / -2);\n      transform: translateX(var(--lighting-offset-x, 0)) translateY(var(--lighting-offset-y, 0));\n      background-image: radial-gradient(\n        circle at center,\n        rgba(255, 255, 255, 0.1) 0%,\n        rgba(255, 255, 255, 0) 30%\n      );\n      border-radius: 50%;\n    }\n    ${e}.block-active .lighting {\n      width: var(--lighting-size, 20px);\n      height: var(--lighting-size, 20px);\n    }\n  `,document.head.appendChild(styleTag)}function createCursor(){if(isServer)return;cursorEle=document.createElement("div");const e=document.createElement("div");cursorEle.classList.add(config.className),e.classList.add("lighting"),cursorEle.appendChild(e),document.body.appendChild(cursorEle),resetCursorStyle()}function updateCursorPosition(){!isServer&&cursorEle&&(isBlockActive||(updateCursorStyle("--cursor-x",`${position.x}px`),updateCursorStyle("--cursor-y",`${position.y}px`)),window.requestAnimationFrame(updateCursorPosition))}function queryAllTargets(){return isServer||!ready?[]:document.querySelectorAll("[data-cursor]")}function updateCursor(){if(initCursor(),isServer||!ready)return;const e=new Map;queryAllTargets().forEach(t=>{e.set(t,!0),registeredNodeSet.has(t)||registerNode(t)}),registeredNodeSet.forEach(t=>{e.has(t)||unregisterNode(t)})}function registerNode(e){let t=e.getAttribute("data-cursor");registeredNodeSet.add(e),"text"===t&&registerTextNode(e),"block"===t?registerBlockNode(e):registeredNodeSet.delete(e)}function unregisterNode(e){var t;registeredNodeSet.delete(e),null===(t=eventMap.get(e))||void 0===t||t.forEach(({event:t,handler:r})=>{"mouseleave"===t&&r(),e.removeEventListener(t,r)}),eventMap.delete(e),e.style.setProperty("transform","none")}function extractCustomStyle(e){const t=e.getAttribute("data-cursor-style"),r={};return t&&t.split(/(;)/).forEach(e=>{const[t,o]=e.split(":").map(e=>e.trim());r[t]=o}),r}function registerTextNode(e){let t;function r(e){isTextActive=!!e,cursorEle&&(e?cursorEle.classList.add("text-active"):cursorEle.classList.remove("text-active"))}function o(e){t&&clearTimeout(t),r(!0),t=setTimeout(()=>r(!0)),applyTextCursor(e.target)}function s(){t&&clearTimeout(t),t=setTimeout(()=>r(!1)),resetCursorStyle()}e.addEventListener("mouseover",o,{passive:!0}),e.addEventListener("mouseleave",s,{passive:!0}),eventMap.set(e,[{event:"mouseover",handler:o},{event:"mouseleave",handler:s}])}function registerBlockNode(e){const t=e;let r;function o(e){isBlockActive=!!e,cursorEle&&(e?cursorEle.classList.add("block-active"):cursorEle.classList.remove("block-active"))}function s(){var e,s,n;cursorEle&&cursorEle.classList.toggle("lighting--on",!!config.enableLighting),a(!1);const i=t.getBoundingClientRect();r&&clearTimeout(r),o(!0),r=setTimeout(()=>o(!0)),cursorEle&&cursorEle.classList.add("block-active");const u={...config.blockStyle||{}};let l=null!==(e=config.blockPadding)&&void 0!==e?e:0,c=null==u?void 0:u.radius;if("auto"===l){const e=Math.min(i.width,i.height);l=Math.max(2,Math.floor(e/25))}if("auto"===c){const e=Utils.getSize(l),r=window.getComputedStyle(t).borderRadius;c=r.startsWith("0")||"none"===r?"0":`calc(${e} + ${r})`,u.radius=c}updateCursorStyle("--cursor-x",`${i.left+i.width/2}px`),updateCursorStyle("--cursor-y",`${i.top+i.height/2}px`),updateCursorStyle("--cursor-width",`${i.width+2*l}px`),updateCursorStyle("--cursor-height",`${i.height+2*l}px`);const d={...u,...extractCustomStyle(t)};void 0===d.durationPosition&&(d.durationPosition=null!==(s=d.durationBase)&&void 0!==s?s:null===(n=config.normalStyle)||void 0===n?void 0:n.durationBase),updateCursorStyle(Utils.style2Vars(d)),a(!0),t.style.setProperty("transform","translate(var(--translateX), var(--translateY))")}function n(){var e;isBlockActive||s();const r=t.getBoundingClientRect(),o=r.height/2,n=(position.y-r.top-o)/o,i=r.width/2,u=(position.x-r.left-i)/i,l=null!==(e=config.adsorptionStrength)&&void 0!==e?e:10;updateCursorStyle("--cursor-translateX",`${u*(r.width/100*l)}px`),updateCursorStyle("--cursor-translateY",`${n*(r.height/100*l)}px`),a(!1);const c=u*(r.width/100*l),d=n*(r.height/100*l);if(t.style.setProperty("--translateX",`${c}px`),t.style.setProperty("--translateY",`${d}px`),config.enableLighting){const e=3*Math.max(r.width,r.height)*1.2,t=position.x-r.left,o=position.y-r.top;updateCursorStyle("--lighting-size",`${e}px`),updateCursorStyle("--lighting-offset-x",`${t}px`),updateCursorStyle("--lighting-offset-y",`${o}px`)}}function i(){r&&clearTimeout(r),r=setTimeout(()=>o(!1)),resetCursorStyle(),a(!0),t.style.setProperty("transform","translate(0px, 0px)")}function a(e){var r,o,s,n,i,a;const u=e?Utils.getDuration(null!==(a=null!==(n=null!==(o=null===(r=null==config?void 0:config.blockStyle)||void 0===r?void 0:r.durationPosition)&&void 0!==o?o:null===(s=null==config?void 0:config.blockStyle)||void 0===s?void 0:s.durationBase)&&void 0!==n?n:null===(i=null==config?void 0:config.normalStyle)||void 0===i?void 0:i.durationBase)&&void 0!==a?a:"0.23s"):"";t.style.setProperty("transition",u?`all ${u} cubic-bezier(.58,.09,.46,1.46)`:"none")}t.addEventListener("mouseenter",s,{passive:!0}),t.addEventListener("mousemove",n,{passive:!0}),t.addEventListener("mouseleave",i,{passive:!0}),eventMap.set(t,[{event:"mouseenter",handler:s},{event:"mousemove",handler:n},{event:"mouseleave",handler:i}])}function resetCursorStyle(){var e;"auto"===(null===(e=config.normalStyle)||void 0===e?void 0:e.radius)&&(config.normalStyle.radius=config.normalStyle.width),updateCursorStyle(Utils.style2Vars(config.normalStyle||{}))}function applyTextCursor(e){updateCursorStyle(Utils.style2Vars(config.textStyle||{})),updateCursorStyle("--cursor-font-size",window.getComputedStyle(e).fontSize),updateCursorStyle(Utils.style2Vars({...config.textStyle,...extractCustomStyle(e)}))}function customCursorStyle(e){return Object.entries(e).map(([e,t])=>`${e}: ${t}`).join("; ")}function resetCursor(){isBlockActive=!1,isTextActive=!1,resetCursorStyle()}const CursorType={TEXT:"text",BLOCK:"block"},exported={CursorType:CursorType,resetCursor:resetCursor,initCursor:initCursor,updateCursor:updateCursor,disposeCursor:disposeCursor,updateConfig:updateConfig,customCursorStyle:customCursorStyle};export{CursorType,customCursorStyle,exported as default,disposeCursor,initCursor,resetCursor,updateConfig,updateCursor};
+let ready = false;
+let observer = null;
+let cursorEle = null;
+let isBlockActive = false;
+let isTextActive = false;
+let isMouseDown = false;
+let styleTag = null;
+let latestCursorStyle = {};
+let mousedownStyleRecover = {};
+const position = { x: 0, y: 0 };
+const isServer = typeof document === "undefined";
+const registeredNodeSet = new Set();
+const eventMap = new Map();
+const config = getDefaultConfig();
+/**
+ * Util collection
+ */
+class Utils {
+    static clamp(num, min, max) {
+        return Math.min(Math.max(num, min), max);
+    }
+    static isNum(v) {
+        return typeof v === "number" || /^\d+$/.test(v);
+    }
+    static getSize(size) {
+        if (this.isNum(size))
+            return `${size}px`;
+        return size;
+    }
+    static getDuration(duration) {
+        if (this.isNum(duration))
+            return `${duration}ms`;
+        return `${duration}`;
+    }
+    static getColor(color) {
+        return color;
+    }
+    static objectKeys(obj) {
+        return Object.keys(obj);
+    }
+    static style2Vars(style) {
+        const map = {
+            backdropBlur: "--cursor-bg-blur",
+            backdropSaturate: "--cursor-bg-saturate",
+            background: "--cursor-bg",
+            border: "--cursor-border",
+            durationBackdropFilter: "--cursor-blur-duration",
+            durationBase: "--cursor-duration",
+            durationPosition: "--cursor-position-duration",
+            height: "--cursor-height",
+            radius: "--cursor-radius",
+            scale: "--cursor-scale",
+            width: "--cursor-width",
+            zIndex: "--cursor-z-index",
+        };
+        return this.objectKeys(style).reduce((prev, key) => {
+            let value = style[key];
+            if (value === undefined)
+                return prev;
+            const maybeColor = ["background", "border"].includes(key);
+            const maybeSize = ["width", "height", "radius", "backdropBlur"].includes(key);
+            const maybeDuration = key.startsWith("duration");
+            if (maybeColor)
+                value = this.getColor(value);
+            if (maybeSize)
+                value = this.getSize(value);
+            if (maybeDuration)
+                value = this.getDuration(value);
+            const recordKey = map[key] || key;
+            return { ...prev, [recordKey]: value };
+        }, {});
+    }
+    static isMergebleObject(obj) {
+        const isObject = (o) => o && typeof o === "object" && !Array.isArray(o);
+        return isObject(obj);
+    }
+    static mergeDeep(obj, ...sources) {
+        if (!sources.length)
+            return obj;
+        const source = sources.shift();
+        if (!source)
+            return obj;
+        if (this.isMergebleObject(obj) && this.isMergebleObject(source)) {
+            Utils.objectKeys(source).forEach((key) => {
+                if (this.isMergebleObject(source[key])) {
+                    if (!obj[key])
+                        Object.assign(obj, { [key]: {} });
+                    this.mergeDeep(obj[key], source[key]);
+                }
+                else {
+                    Object.assign(obj, { [key]: source[key] });
+                }
+            });
+        }
+        return this.mergeDeep(obj, ...sources);
+    }
+}
+/**
+ * Get default config
+ * @returns
+ */
+function getDefaultConfig() {
+    const normalStyle = {
+        width: "20px",
+        height: "20px",
+        radius: "50%",
+        durationBase: "0.23s",
+        durationPosition: "0s",
+        durationBackdropFilter: "0s",
+        background: "rgba(150, 150, 150, 0.2)",
+        scale: 1,
+        border: "1px solid rgba(100, 100, 100, 0.1)",
+        zIndex: 9999,
+        backdropBlur: "0px",
+        backdropSaturate: "180%",
+    };
+    const textStyle = {
+        background: "rgba(100, 100, 100, 0.3)",
+        scale: 1,
+        width: "4px",
+        height: "1.2em",
+        border: "0px solid rgba(100, 100, 100, 0)",
+        durationBackdropFilter: "1s",
+        radius: "10px",
+    };
+    const blockStyle = {
+        background: "rgba(100, 100, 100, 0.3)",
+        border: "1px solid rgba(100, 100, 100, 0.05)",
+        backdropBlur: "0px",
+        durationBase: "0.23s",
+        durationBackdropFilter: "0.1s",
+        backdropSaturate: "120%",
+        radius: "10px",
+    };
+    const mouseDownStyle = {
+        background: "rgba(150, 150, 150, 0.3)",
+        scale: 0.8,
+    };
+    const defaultConfig = {
+        blockPadding: "auto",
+        adsorptionStrength: 10,
+        className: "ipad-cursor",
+        normalStyle,
+        textStyle,
+        blockStyle,
+        mouseDownStyle,
+    };
+    return defaultConfig;
+}
+/** update cursor style (single or multiple) */
+function updateCursorStyle(keyOrObj, value) {
+    if (!cursorEle)
+        return;
+    if (typeof keyOrObj === "string") {
+        latestCursorStyle[keyOrObj] = value;
+        value && cursorEle.style.setProperty(keyOrObj, value);
+    }
+    else {
+        Object.entries(keyOrObj).forEach(([key, value]) => {
+            cursorEle && cursorEle.style.setProperty(key, value);
+            latestCursorStyle[key] = value;
+        });
+    }
+}
+/** record mouse position */
+function onMousemove(e) {
+    position.x = e.clientX;
+    position.y = e.clientY;
+    autoApplyTextCursor(e.target);
+}
+function onMousedown() {
+    if (isMouseDown || !config.enableMouseDownEffect || isBlockActive)
+        return;
+    isMouseDown = true;
+    mousedownStyleRecover = { ...latestCursorStyle };
+    updateCursorStyle(Utils.style2Vars(config.mouseDownStyle || {}));
+}
+function onMouseup() {
+    if (!isMouseDown || !config.enableMouseDownEffect || isBlockActive)
+        return;
+    isMouseDown = false;
+    const target = mousedownStyleRecover;
+    const styleToRecover = Utils.objectKeys(Utils.style2Vars(config.mouseDownStyle || {})).reduce((prev, curr) => ({ ...prev, [curr]: target[curr] }), {});
+    updateCursorStyle(styleToRecover);
+}
+/**
+ * Automatically apply cursor style when hover on target
+ * @param target
+ * @returns
+ */
+function autoApplyTextCursor(target) {
+    var _a;
+    if (isBlockActive || isTextActive || !config.enableAutoTextCursor)
+        return;
+    if (target && target.childNodes.length === 1) {
+        const child = target.childNodes[0];
+        if (child.nodeType === 3 && ((_a = child.textContent) === null || _a === void 0 ? void 0 : _a.trim()) !== "") {
+            target.setAttribute("data-cursor", "text");
+            applyTextCursor(target);
+            return;
+        }
+    }
+    resetCursorStyle();
+}
+let lastNode = null;
+const scrollHandler = () => {
+    const currentNode = document.elementFromPoint(position.x, position.y);
+    const mouseLeaveEvent = new MouseEvent("mouseleave", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+    });
+    if (currentNode !== lastNode && lastNode && mouseLeaveEvent) {
+        lastNode.dispatchEvent(mouseLeaveEvent);
+    }
+    lastNode = currentNode;
+};
+/**
+ * Init cursor, hide default cursor, and listen mousemove event
+ * will only run once in client even if called multiple times
+ * @returns
+ */
+function initCursor(_config) {
+    if (isServer || ready)
+        return;
+    if (_config)
+        updateConfig(_config);
+    ready = true;
+    window.addEventListener("mousemove", onMousemove);
+    window.addEventListener("mousedown", onMousedown);
+    window.addEventListener("mouseup", onMouseup);
+    window.addEventListener("scroll", scrollHandler);
+    createCursor();
+    createStyle();
+    updateCursorPosition();
+    updateCursor();
+    createObserver();
+}
+function createObserver() {
+    if (config.enableAutoUpdateCursor) {
+        observer = new MutationObserver(function () {
+            updateCursor();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+}
+/**
+ * destroy cursor, remove event listener and remove cursor element
+ * @returns
+ */
+function disposeCursor() {
+    if (!ready)
+        return;
+    ready = false;
+    window.removeEventListener("mousemove", onMousemove);
+    window.removeEventListener("scroll", scrollHandler);
+    cursorEle && cursorEle.remove();
+    styleTag && styleTag.remove();
+    styleTag = null;
+    cursorEle = null;
+    // iterate nodesMap
+    registeredNodeSet.forEach((node) => unregisterNode(node));
+    observer === null || observer === void 0 ? void 0 : observer.disconnect();
+}
+/**
+ * Update current Configuration
+ * @param _config
+ */
+function updateConfig(_config) {
+    var _a;
+    if ("adsorptionStrength" in _config) {
+        config.adsorptionStrength = Utils.clamp((_a = _config.adsorptionStrength) !== null && _a !== void 0 ? _a : 10, 0, 30);
+    }
+    return Utils.mergeDeep(config, _config);
+}
+/**
+ * Create style tag
+ * @returns
+ */
+function createStyle() {
+    if (styleTag)
+        return;
+    const selector = `.${config.className.split(/\s+/).join(".")}`;
+    styleTag = document.createElement("style");
+    styleTag.innerHTML = `
+    body, * {
+      cursor: none;
+    }
+    ${selector} {
+      --cursor-transform-duration: 0.23s;
+      overflow: hidden;
+      pointer-events: none;
+      position: fixed;
+      left: var(--cursor-x);
+      top: var(--cursor-y);
+      width: var(--cursor-width);
+      height: var(--cursor-height);
+      border-radius: var(--cursor-radius);
+      background-color: var(--cursor-bg);
+      border: var(--cursor-border);
+      z-index: var(--cursor-z-index);
+      font-size: var(--cursor-font-size);
+      backdrop-filter:
+        blur(var(--cursor-bg-blur))
+        saturate(var(--cursor-bg-saturate));
+      transition:
+        width var(--cursor-duration) ease,
+        height var(--cursor-duration) ease,
+        border-radius var(--cursor-duration) ease,
+        border var(--cursor-duration) ease,
+        background-color var(--cursor-duration) ease,
+        left var(--cursor-position-duration) ease,
+        top var(--cursor-position-duration) ease,
+        backdrop-filter var(--cursor-blur-duration) ease,
+        transform var(--cursor-transform-duration) ease;
+      transform:
+        translateX(calc(var(--cursor-translateX, 0px) - 50%))
+        translateY(calc(var(--cursor-translateY, 0px) - 50%))
+        scale(var(--cursor-scale, 1));
+    }
+    ${selector}.block-active {
+      --cursor-transform-duration: 0s;
+    }
+    ${selector} .lighting {
+      display: none;
+    }
+    ${selector}.lighting--on .lighting {
+      display: block;
+      width: 0;
+      height: 0;
+      position: absolute;
+      left: calc(var(--lighting-size) / -2);
+      top: calc(var(--lighting-size) / -2);
+      transform: translateX(var(--lighting-offset-x, 0)) translateY(var(--lighting-offset-y, 0));
+      background-image: radial-gradient(
+        circle at center,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0) 30%
+      );
+      border-radius: 50%;
+    }
+    ${selector}.block-active .lighting {
+      width: var(--lighting-size, 20px);
+      height: var(--lighting-size, 20px);
+    }
+  `;
+    document.head.appendChild(styleTag);
+}
+/**
+ * create cursor element, append to body
+ * @returns
+ */
+function createCursor() {
+    if (isServer)
+        return;
+    cursorEle = document.createElement("div");
+    const lightingEle = document.createElement("div");
+    cursorEle.classList.add(config.className);
+    lightingEle.classList.add("lighting");
+    cursorEle.appendChild(lightingEle);
+    document.body.appendChild(cursorEle);
+    resetCursorStyle();
+}
+/**
+ * update cursor position, request animation frame
+ * @returns
+ */
+function updateCursorPosition() {
+    if (isServer || !cursorEle)
+        return;
+    if (!isBlockActive) {
+        updateCursorStyle("--cursor-x", `${position.x}px`);
+        updateCursorStyle("--cursor-y", `${position.y}px`);
+    }
+    window.requestAnimationFrame(updateCursorPosition);
+}
+/**
+ * get all hover targets
+ * @returns
+ */
+function queryAllTargets() {
+    if (isServer || !ready)
+        return [];
+    return document.querySelectorAll("[data-cursor]");
+}
+/**
+ * Detect all interactive elements in the page
+ * Update the binding of events, remove listeners for elements that are removed
+ * @returns
+ */
+function updateCursor() {
+    initCursor();
+    if (isServer || !ready)
+        return;
+    const nodesMap = new Map();
+    // addDataCursorText(document.body.childNodes)
+    const nodes = queryAllTargets();
+    nodes.forEach((node) => {
+        nodesMap.set(node, true);
+        if (registeredNodeSet.has(node))
+            return;
+        registerNode(node);
+    });
+    registeredNodeSet.forEach((node) => {
+        if (nodesMap.has(node))
+            return;
+        unregisterNode(node);
+    });
+}
+function registerNode(node) {
+    let type = node.getAttribute("data-cursor");
+    registeredNodeSet.add(node);
+    if (type === "text")
+        registerTextNode(node);
+    if (type === "block")
+        registerBlockNode(node);
+    else
+        registeredNodeSet.delete(node);
+}
+function unregisterNode(node) {
+    var _a;
+    registeredNodeSet.delete(node);
+    (_a = eventMap.get(node)) === null || _a === void 0 ? void 0 : _a.forEach(({ event, handler }) => {
+        if (event === 'mouseleave')
+            handler();
+        node.removeEventListener(event, handler);
+    });
+    eventMap.delete(node);
+    node.style.setProperty("transform", "none");
+}
+function extractCustomStyle(node) {
+    const customStyleRaw = node.getAttribute("data-cursor-style");
+    const styleObj = {};
+    if (customStyleRaw) {
+        customStyleRaw.split(/(;)/).forEach((style) => {
+            const [key, value] = style.split(":").map((s) => s.trim());
+            styleObj[key] = value;
+        });
+    }
+    return styleObj;
+}
+/**
+ * + ---------------------- +
+ * | TextNode               |
+ * + ---------------------- +
+ */
+function registerTextNode(node) {
+    let timer;
+    function toggleTextActive(active) {
+        isTextActive = !!active;
+        cursorEle &&
+            (active
+                ? cursorEle.classList.add("text-active")
+                : cursorEle.classList.remove("text-active"));
+    }
+    function onTextOver(e) {
+        timer && clearTimeout(timer);
+        toggleTextActive(true);
+        // for some edge case, two ele very close
+        timer = setTimeout(() => toggleTextActive(true));
+        applyTextCursor(e.target);
+    }
+    function onTextLeave() {
+        timer && clearTimeout(timer);
+        timer = setTimeout(() => toggleTextActive(false));
+        resetCursorStyle();
+    }
+    node.addEventListener("mouseover", onTextOver, { passive: true });
+    node.addEventListener("mouseleave", onTextLeave, { passive: true });
+    eventMap.set(node, [
+        { event: "mouseover", handler: onTextOver },
+        { event: "mouseleave", handler: onTextLeave },
+    ]);
+}
+/**
+ * + ---------------------- +
+ * | BlockNode              |
+ * + ---------------------- +
+ */
+function registerBlockNode(_node) {
+    const node = _node;
+    node.addEventListener("mouseenter", onBlockEnter, { passive: true });
+    node.addEventListener("mousemove", onBlockMove, { passive: true });
+    node.addEventListener("mouseleave", onBlockLeave, { passive: true });
+    let timer;
+    function toggleBlockActive(active) {
+        isBlockActive = !!active;
+        cursorEle &&
+            (active
+                ? cursorEle.classList.add("block-active")
+                : cursorEle.classList.remove("block-active"));
+    }
+    function onBlockEnter() {
+        var _a, _b, _c;
+        // TODO: maybe control this in other way
+        cursorEle &&
+            cursorEle.classList.toggle("lighting--on", !!config.enableLighting);
+        // Prevents the cursor from shifting from the node during rapid enter/leave.
+        toggleNodeTransition(false);
+        const rect = node.getBoundingClientRect();
+        timer && clearTimeout(timer);
+        toggleBlockActive(true);
+        // for some edge case, two ele very close
+        timer = setTimeout(() => toggleBlockActive(true));
+        cursorEle && cursorEle.classList.add("block-active");
+        const updateStyleObj = { ...(config.blockStyle || {}) };
+        const blockPadding = (_a = config.blockPadding) !== null && _a !== void 0 ? _a : 0;
+        let padding = blockPadding;
+        let radius = updateStyleObj === null || updateStyleObj === void 0 ? void 0 : updateStyleObj.radius;
+        if (padding === "auto") {
+            const size = Math.min(rect.width, rect.height);
+            padding = Math.max(2, Math.floor(size / 25));
+        }
+        if (radius === "auto") {
+            const paddingCss = Utils.getSize(padding);
+            const nodeRadius = window.getComputedStyle(node).borderRadius;
+            if (nodeRadius.startsWith("0") || nodeRadius === "none")
+                radius = "0";
+            else
+                radius = `calc(${paddingCss} + ${nodeRadius})`;
+            updateStyleObj.radius = radius;
+        }
+        updateCursorStyle("--cursor-x", `${rect.left + rect.width / 2}px`);
+        updateCursorStyle("--cursor-y", `${rect.top + rect.height / 2}px`);
+        updateCursorStyle("--cursor-width", `${rect.width + padding * 2}px`);
+        updateCursorStyle("--cursor-height", `${rect.height + padding * 2}px`);
+        const styleToUpdate = {
+            ...updateStyleObj,
+            ...extractCustomStyle(node),
+        };
+        if (styleToUpdate.durationPosition === undefined) {
+            styleToUpdate.durationPosition =
+                (_b = styleToUpdate.durationBase) !== null && _b !== void 0 ? _b : (_c = config.normalStyle) === null || _c === void 0 ? void 0 : _c.durationBase;
+        }
+        updateCursorStyle(Utils.style2Vars(styleToUpdate));
+        toggleNodeTransition(true);
+        node.style.setProperty("transform", "translate(var(--translateX), var(--translateY))");
+    }
+    function onBlockMove() {
+        var _a;
+        if (!isBlockActive) {
+            onBlockEnter();
+        }
+        const rect = node.getBoundingClientRect();
+        const halfHeight = rect.height / 2;
+        const topOffset = (position.y - rect.top - halfHeight) / halfHeight;
+        const halfWidth = rect.width / 2;
+        const leftOffset = (position.x - rect.left - halfWidth) / halfWidth;
+        const strength = (_a = config.adsorptionStrength) !== null && _a !== void 0 ? _a : 10;
+        updateCursorStyle("--cursor-translateX", `${leftOffset * ((rect.width / 100) * strength)}px`);
+        updateCursorStyle("--cursor-translateY", `${topOffset * ((rect.height / 100) * strength)}px`);
+        toggleNodeTransition(false);
+        const nodeTranslateX = leftOffset * ((rect.width / 100) * strength);
+        const nodeTranslateY = topOffset * ((rect.height / 100) * strength);
+        node.style.setProperty("--translateX", `${nodeTranslateX}px`);
+        node.style.setProperty("--translateY", `${nodeTranslateY}px`);
+        // lighting
+        if (config.enableLighting) {
+            const lightingSize = Math.max(rect.width, rect.height) * 3 * 1.2;
+            const lightingOffsetX = position.x - rect.left;
+            const lightingOffsetY = position.y - rect.top;
+            updateCursorStyle("--lighting-size", `${lightingSize}px`);
+            updateCursorStyle("--lighting-offset-x", `${lightingOffsetX}px`);
+            updateCursorStyle("--lighting-offset-y", `${lightingOffsetY}px`);
+        }
+    }
+    function onBlockLeave() {
+        timer && clearTimeout(timer);
+        timer = setTimeout(() => toggleBlockActive(false));
+        resetCursorStyle();
+        toggleNodeTransition(true);
+        node.style.setProperty("transform", "translate(0px, 0px)");
+    }
+    function toggleNodeTransition(enable) {
+        var _a, _b, _c, _d, _e, _f;
+        const duration = enable
+            ? Utils.getDuration((_f = (_d = (_b = (_a = config === null || config === void 0 ? void 0 : config.blockStyle) === null || _a === void 0 ? void 0 : _a.durationPosition) !== null && _b !== void 0 ? _b : (_c = config === null || config === void 0 ? void 0 : config.blockStyle) === null || _c === void 0 ? void 0 : _c.durationBase) !== null && _d !== void 0 ? _d : (_e = config === null || config === void 0 ? void 0 : config.normalStyle) === null || _e === void 0 ? void 0 : _e.durationBase) !== null && _f !== void 0 ? _f : "0.23s")
+            : "";
+        node.style.setProperty("transition", duration ? `all ${duration} cubic-bezier(.58,.09,.46,1.46)` : "none");
+    }
+    eventMap.set(node, [
+        { event: "mouseenter", handler: onBlockEnter },
+        { event: "mousemove", handler: onBlockMove },
+        { event: "mouseleave", handler: onBlockLeave },
+    ]);
+}
+function resetCursorStyle() {
+    var _a;
+    if (((_a = config.normalStyle) === null || _a === void 0 ? void 0 : _a.radius) === "auto")
+        config.normalStyle.radius = config.normalStyle.width;
+    updateCursorStyle(Utils.style2Vars(config.normalStyle || {}));
+}
+function applyTextCursor(sourceNode) {
+    updateCursorStyle(Utils.style2Vars(config.textStyle || {}));
+    const fontSize = window.getComputedStyle(sourceNode).fontSize;
+    updateCursorStyle("--cursor-font-size", fontSize);
+    updateCursorStyle(Utils.style2Vars({
+        ...config.textStyle,
+        ...extractCustomStyle(sourceNode),
+    }));
+}
+/**
+ * Create custom style that can be bound to `data-cursor-style`
+ * @param style
+ */
+function customCursorStyle(style) {
+    return Object.entries(style)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("; ");
+}
+function resetCursor() {
+    isBlockActive = false;
+    isTextActive = false;
+    resetCursorStyle();
+}
+const CursorType = {
+    TEXT: "text",
+    BLOCK: "block",
+};
+const exported = {
+    CursorType,
+    resetCursor,
+    initCursor,
+    updateCursor,
+    disposeCursor,
+    updateConfig,
+    customCursorStyle,
+};
+
+export { CursorType, customCursorStyle, exported as default, disposeCursor, initCursor, resetCursor, updateConfig, updateCursor };
